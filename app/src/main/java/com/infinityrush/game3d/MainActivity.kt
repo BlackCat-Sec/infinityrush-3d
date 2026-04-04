@@ -211,7 +211,7 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
         when (snapshot.state) {
             RunnerState.START -> {
                 hudBar.visibility = View.GONE
-                settingsStrip.visibility = View.VISIBLE
+                settingsStrip.visibility = View.GONE
                 startOverlay.visibility = View.VISIBLE
                 pauseOverlay.visibility = View.GONE
                 gameOverOverlay.visibility = View.GONE
@@ -235,7 +235,7 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
 
             RunnerState.GAME_OVER -> {
                 hudBar.visibility = View.GONE
-                settingsStrip.visibility = View.VISIBLE
+                settingsStrip.visibility = View.GONE
                 startOverlay.visibility = View.GONE
                 pauseOverlay.visibility = View.GONE
                 gameOverOverlay.visibility = View.VISIBLE
@@ -245,10 +245,9 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
 
     private fun applyResponsivePanels() {
         val screenWidth = resources.displayMetrics.widthPixels
-        setPanelWidth(settingsStrip, screenWidth, 460)
-        setPanelWidth(startOverlay, screenWidth, 420)
-        setPanelWidth(pauseOverlay, screenWidth, 360)
-        setPanelWidth(gameOverOverlay, screenWidth, 390)
+        setPanelWidth(startOverlay, screenWidth, 430)
+        setPanelWidth(pauseOverlay, screenWidth, 410)
+        setPanelWidth(gameOverOverlay, screenWidth, 410)
     }
 
     private fun setPanelWidth(panel: View, screenWidth: Int, maxWidthDp: Int) {

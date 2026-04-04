@@ -582,10 +582,10 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
         val cameraBob = sin(runAnimationTime * 0.55f) * 0.08f
         val portraitCamera = screenAspectRatio < 1f
-        val cameraDistance = if (portraitCamera) 11.6f else 9.0f
-        val cameraX = runnerX * if (portraitCamera) 0.18f else 0.24f
-        val cameraY = (if (slideTimer > 0f) 3.0f else 3.42f + runnerY * 0.12f) + if (portraitCamera) 0.16f else 0f
-        val lookAheadZ = if (portraitCamera) -15.5f else -13f
+        val cameraDistance = if (portraitCamera) 13.6f else 10.9f
+        val cameraX = runnerX * if (portraitCamera) 0.12f else 0.16f
+        val cameraY = (if (slideTimer > 0f) 3.45f else 4.18f + runnerY * 0.14f) + if (portraitCamera) 0.22f else 0f
+        val lookAheadZ = if (portraitCamera) -18.4f else -15.8f
         Matrix.setLookAtM(
             viewMatrix,
             0,
@@ -600,28 +600,56 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             0f
         )
 
+        drawBackdrop()
         drawTrack()
         drawEnvironment()
         drawCoins()
         drawPowerUps()
         drawObstacles()
+        drawGuardian()
         drawRunner()
     }
 
+    private fun drawBackdrop() {
+        val zoneTint = when {
+            currentLevel < 3 -> color(0.48f, 0.42f, 0.26f, 0.26f)
+            currentLevel < 6 -> color(0.62f, 0.38f, 0.19f, 0.26f)
+            currentLevel < 9 -> color(0.26f, 0.44f, 0.52f, 0.24f)
+            else -> color(0.62f, 0.62f, 0.72f, 0.24f)
+        }
+
+        drawCube(0f, 8.2f, -104f, 44f, 12f, 1.6f, color(0.07f, 0.10f, 0.14f, 0.95f))
+        drawCube(-11.5f, 7.8f, -88f, 3.8f, 8.6f, 2.4f, color(0.13f, 0.14f, 0.10f, 0.92f))
+        drawCube(12.8f, 8.1f, -94f, 4.6f, 9.8f, 2.6f, color(0.12f, 0.13f, 0.10f, 0.92f))
+        drawCube(-7.8f, 6.0f, -72f, 1.5f, 5.0f, 1.6f, color(0.18f, 0.16f, 0.11f, 0.88f), rotationZ = 6f)
+        drawCube(8.4f, 6.5f, -76f, 1.8f, 6.2f, 1.8f, color(0.19f, 0.16f, 0.12f, 0.88f), rotationZ = -5f)
+        drawCube(6.8f, 9.4f, -90f, 3.0f, 3.0f, 0.3f, color(0.94f, 0.70f, 0.38f, 0.38f))
+        drawCube(6.8f, 9.4f, -90.2f, 4.2f, 4.2f, 0.1f, zoneTint)
+        drawCube(0f, 1.4f, -56f, 24f, 0.08f, 14f, color(0.15f, 0.18f, 0.18f, 0.16f))
+    }
+
     private fun drawTrack() {
-        val segmentLength = 10f
-        val trackWidth = laneWidth * 3.35f
+        val segmentLength = 8.4f
+        val roadWidth = laneWidth * 2.22f
+        val shoulderWidth = roadWidth + 1.3f
         val scroll = distance % segmentLength
 
-        for (index in 0..16) {
-            val centerZ = scroll - index * segmentLength - 6f
-            val stoneColor = if (index % 2 == 0) color(0.23f, 0.22f, 0.18f) else color(0.20f, 0.19f, 0.16f)
-            drawCube(0f, groundY - 0.12f, centerZ, trackWidth, 0.14f, segmentLength, stoneColor)
-            drawCube(-laneWidth, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
-            drawCube(0f, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
-            drawCube(laneWidth, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
-            drawCube(-trackWidth * 0.52f, groundY + 0.5f, centerZ, 0.26f, 1.0f, segmentLength, color(0.12f, 0.11f, 0.09f))
-            drawCube(trackWidth * 0.52f, groundY + 0.5f, centerZ, 0.26f, 1.0f, segmentLength, color(0.12f, 0.11f, 0.09f))
+        for (index in 0..18) {
+            val centerZ = scroll - index * segmentLength - 4.5f
+            val roadStone = if (index % 2 == 0) color(0.30f, 0.27f, 0.21f) else color(0.26f, 0.23f, 0.18f)
+            val shoulderStone = if (index % 2 == 0) color(0.21f, 0.17f, 0.12f) else color(0.18f, 0.15f, 0.11f)
+            val pathAccent = color(0.71f, 0.60f, 0.34f, 0.92f)
+            val laneMarker = color(0.81f, 0.72f, 0.46f, 0.72f)
+
+            drawCube(0f, groundY - 0.42f, centerZ, 12.4f, 0.52f, segmentLength + 1.3f, color(0.14f, 0.10f, 0.08f))
+            drawCube(0f, groundY - 0.14f, centerZ, shoulderWidth, 0.16f, segmentLength + 0.18f, shoulderStone)
+            drawCube(0f, groundY - 0.02f, centerZ, roadWidth, 0.05f, segmentLength - 0.18f, roadStone)
+
+            drawCube(-roadWidth * 0.50f, groundY + 0.02f, centerZ, 0.08f, 0.05f, segmentLength - 0.42f, pathAccent)
+            drawCube(roadWidth * 0.50f, groundY + 0.02f, centerZ, 0.08f, 0.05f, segmentLength - 0.42f, pathAccent)
+            drawCube(-laneWidth * 0.52f, groundY + 0.01f, centerZ, 0.03f, 0.02f, segmentLength - 0.52f, laneMarker)
+            drawCube(0f, groundY + 0.01f, centerZ, 0.03f, 0.02f, segmentLength - 0.52f, laneMarker)
+            drawCube(laneWidth * 0.52f, groundY + 0.01f, centerZ, 0.03f, 0.02f, segmentLength - 0.52f, laneMarker)
         }
     }
 
@@ -678,8 +706,9 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     private fun drawCliff(x: Float, z: Float, height: Float) {
-        drawCube(x, groundY + height * 0.5f, z, 3.0f, height, 2.8f, color(0.15f, 0.16f, 0.12f))
-        drawCube(x + sign(x) * 0.3f, groundY + height - 0.7f, z, 2.0f, 0.28f, 1.8f, color(0.24f, 0.22f, 0.16f))
+        drawCube(x, groundY + height * 0.5f, z, 2.4f, height, 2.2f, color(0.14f, 0.15f, 0.11f))
+        drawCube(x + sign(x) * 0.18f, groundY + height - 0.55f, z - 0.12f, 1.4f, 0.22f, 1.6f, color(0.28f, 0.24f, 0.17f))
+        drawCube(x - sign(x) * 0.38f, groundY + 0.56f, z + 0.42f, 0.58f, 1.0f, 0.58f, color(0.18f, 0.19f, 0.13f))
     }
 
     private fun drawCoins() {
@@ -774,24 +803,100 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             drawCube(runnerX + 0.82f, baseY + 1.42f, -magnetOffset, 0.14f, 1.02f, 0.14f, color(0.34f, 0.92f, 0.98f, 0.62f))
         }
 
+        val shadowScale = if (slideTimer > 0f) 1.08f else 0.82f
+        drawCube(runnerX, groundY - 0.01f, 0.15f, shadowScale, 0.02f, 0.54f, color(0f, 0f, 0f, 0.24f))
+
         if (slideTimer > 0f) {
-            drawCube(runnerX, baseY + 0.56f, 0f, 1.24f, 0.64f, 1.98f, primary, rotationY = sideLean)
-            drawCube(runnerX, baseY + 0.72f, -0.14f, 0.64f, 0.22f, 1.12f, secondary, rotationY = sideLean)
-            drawCube(runnerX - 0.50f, baseY + 0.78f, 0.18f, 0.44f, 0.44f, 0.44f, skinTone, rotationY = sideLean)
-            drawCube(runnerX + 0.35f, baseY + 0.22f, 0.35f, 0.78f, 0.22f, 0.58f, gear, rotationY = sideLean)
+            drawRunnerSliding(baseY, sideLean, skinTone, hairColor, primary, secondary, gear)
         } else {
-            drawCube(runnerX, baseY + 1.54f, 0f, 0.92f, 1.22f, 0.64f, primary, rotationY = sideLean)
-            drawCube(runnerX, baseY + 1.72f, -0.22f, 0.68f, 0.18f, 0.26f, secondary, rotationY = sideLean)
-            drawCube(runnerX, baseY + 1.46f, -0.38f, 0.52f, 0.64f, 0.26f, gear, rotationY = sideLean)
-            drawCube(runnerX, baseY + 2.48f, 0.04f, 0.60f, 0.62f, 0.58f, skinTone, rotationY = sideLean)
-            drawCube(runnerX, baseY + 2.82f, -0.02f, 0.66f, 0.18f, 0.50f, hairColor, rotationY = sideLean)
-            drawCube(runnerX - 0.52f, baseY + 1.56f, 0.02f, 0.18f, 0.96f, 0.18f, gear, rotationX = -stride, rotationY = sideLean)
-            drawCube(runnerX + 0.52f, baseY + 1.56f, 0.02f, 0.18f, 0.96f, 0.18f, gear, rotationX = stride, rotationY = sideLean)
-            drawCube(runnerX - 0.22f, baseY + 0.56f, 0f, 0.24f, 1.08f, 0.24f, primary, rotationX = stride * 1.2f, rotationY = sideLean)
-            drawCube(runnerX + 0.22f, baseY + 0.56f, 0f, 0.24f, 1.08f, 0.24f, primary, rotationX = -stride * 1.2f, rotationY = sideLean)
-            drawCube(runnerX - 0.22f, baseY + 0.02f, 0.08f, 0.28f, 0.26f, 0.40f, gear, rotationY = sideLean)
-            drawCube(runnerX + 0.22f, baseY + 0.02f, 0.08f, 0.28f, 0.26f, 0.40f, gear, rotationY = sideLean)
+            drawRunnerStanding(baseY, sideLean, stride, skinTone, hairColor, primary, secondary, gear)
         }
+    }
+
+    private fun drawRunnerStanding(
+        baseY: Float,
+        sideLean: Float,
+        stride: Float,
+        skinTone: FloatArray,
+        hairColor: FloatArray,
+        primary: FloatArray,
+        secondary: FloatArray,
+        gear: FloatArray
+    ) {
+        val armSwing = stride * 0.58f
+        val legSwing = stride * 0.82f
+        val scarfWave = sin(runAnimationTime * 1.1f) * 0.18f
+
+        drawCube(runnerX, baseY + 1.48f, 0f, 0.76f, 1.12f, 0.46f, primary, rotationY = sideLean)
+        drawCube(runnerX, baseY + 1.92f, -0.02f, 0.92f, 0.26f, 0.52f, secondary, rotationY = sideLean)
+        drawCube(runnerX, baseY + 1.02f, 0.04f, 0.48f, 0.34f, 0.34f, gear, rotationY = sideLean)
+        drawCube(runnerX, baseY + 1.42f, -0.28f, 0.42f, 0.72f, 0.16f, gear, rotationY = sideLean)
+        drawCube(runnerX, baseY + 2.18f, 0.04f, 0.18f, 0.16f, 0.18f, skinTone, rotationY = sideLean)
+        drawCube(runnerX, baseY + 2.54f, 0.06f, 0.44f, 0.54f, 0.42f, skinTone, rotationY = sideLean)
+        drawCube(runnerX, baseY + 2.88f, -0.02f, 0.50f, 0.14f, 0.40f, hairColor, rotationY = sideLean)
+        drawCube(runnerX, baseY + 2.54f, -0.12f, 0.16f, 0.12f, 0.32f, hairColor, rotationY = sideLean)
+
+        drawCube(runnerX, baseY + 2.12f, -0.26f, 0.62f, 0.18f, 0.14f, secondary, rotationY = sideLean)
+        drawCube(runnerX - 0.10f, baseY + 1.72f, -0.58f - scarfWave, 0.16f, 0.72f, 0.10f, secondary, rotationX = 10f, rotationY = sideLean)
+        drawCube(runnerX + 0.08f, baseY + 1.30f, -0.76f - scarfWave * 1.3f, 0.12f, 0.56f, 0.08f, secondary, rotationX = 20f, rotationY = sideLean)
+
+        drawCube(runnerX - 0.44f, baseY + 1.72f, 0.02f, 0.16f, 0.58f, 0.16f, primary, rotationX = -armSwing, rotationZ = 8f, rotationY = sideLean)
+        drawCube(runnerX - 0.48f, baseY + 1.18f, 0.10f, 0.14f, 0.56f, 0.14f, skinTone, rotationX = -armSwing * 1.2f, rotationZ = 6f, rotationY = sideLean)
+        drawCube(runnerX - 0.49f, baseY + 0.72f, 0.15f, 0.15f, 0.15f, 0.15f, skinTone, rotationY = sideLean)
+
+        drawCube(runnerX + 0.44f, baseY + 1.72f, 0.02f, 0.16f, 0.58f, 0.16f, primary, rotationX = armSwing, rotationZ = -8f, rotationY = sideLean)
+        drawCube(runnerX + 0.48f, baseY + 1.18f, 0.10f, 0.14f, 0.56f, 0.14f, skinTone, rotationX = armSwing * 1.2f, rotationZ = -6f, rotationY = sideLean)
+        drawCube(runnerX + 0.49f, baseY + 0.72f, 0.15f, 0.15f, 0.15f, 0.15f, skinTone, rotationY = sideLean)
+
+        drawCube(runnerX - 0.17f, baseY + 0.56f, 0.02f, 0.22f, 0.72f, 0.22f, primary, rotationX = legSwing, rotationY = sideLean)
+        drawCube(runnerX - 0.17f, baseY - 0.08f, 0.10f, 0.20f, 0.68f, 0.20f, gear, rotationX = legSwing * 0.68f, rotationY = sideLean)
+        drawCube(runnerX - 0.18f, baseY - 0.48f, 0.16f, 0.28f, 0.12f, 0.42f, gear, rotationY = sideLean)
+
+        drawCube(runnerX + 0.17f, baseY + 0.56f, 0.02f, 0.22f, 0.72f, 0.22f, primary, rotationX = -legSwing, rotationY = sideLean)
+        drawCube(runnerX + 0.17f, baseY - 0.08f, 0.10f, 0.20f, 0.68f, 0.20f, gear, rotationX = -legSwing * 0.68f, rotationY = sideLean)
+        drawCube(runnerX + 0.18f, baseY - 0.48f, 0.16f, 0.28f, 0.12f, 0.42f, gear, rotationY = sideLean)
+    }
+
+    private fun drawRunnerSliding(
+        baseY: Float,
+        sideLean: Float,
+        skinTone: FloatArray,
+        hairColor: FloatArray,
+        primary: FloatArray,
+        secondary: FloatArray,
+        gear: FloatArray
+    ) {
+        drawCube(runnerX, baseY + 0.40f, 0.02f, 1.16f, 0.32f, 1.80f, primary, rotationY = sideLean)
+        drawCube(runnerX, baseY + 0.62f, -0.10f, 0.72f, 0.18f, 0.92f, secondary, rotationY = sideLean)
+        drawCube(runnerX - 0.42f, baseY + 0.68f, 0.26f, 0.38f, 0.38f, 0.38f, skinTone, rotationY = sideLean)
+        drawCube(runnerX - 0.42f, baseY + 0.90f, 0.14f, 0.44f, 0.14f, 0.34f, hairColor, rotationY = sideLean)
+        drawCube(runnerX + 0.10f, baseY + 0.52f, -0.44f, 0.32f, 0.52f, 0.12f, secondary, rotationY = sideLean)
+        drawCube(runnerX + 0.48f, baseY + 0.28f, 0.34f, 0.80f, 0.16f, 0.58f, gear, rotationY = sideLean)
+        drawCube(runnerX + 0.12f, baseY + 0.18f, 0.76f, 0.94f, 0.18f, 0.44f, gear, rotationY = sideLean)
+        drawCube(runnerX - 0.22f, baseY + 0.10f, 0.72f, 0.56f, 0.18f, 0.34f, primary, rotationY = sideLean)
+        drawCube(runnerX + 0.08f, baseY + 0.54f, 0.90f, 0.12f, 0.42f, 0.08f, secondary, rotationX = 22f, rotationY = sideLean)
+    }
+
+    private fun drawGuardian() {
+        if (runnerState == RunnerState.START) {
+            return
+        }
+
+        val stride = sin(runAnimationTime * 0.9f) * 18f
+        val guardianX = runnerX * 0.42f
+        val baseY = groundY + 0.06f
+        val bodyColor = color(0.08f, 0.09f, 0.10f, 0.72f)
+        val eyeGlow = color(0.92f, 0.72f, 0.38f, 0.62f)
+
+        drawCube(guardianX, groundY - 0.02f, 4.6f, 0.70f, 0.02f, 0.42f, color(0f, 0f, 0f, 0.18f))
+        drawCube(guardianX, baseY + 1.18f, 4.5f, 0.54f, 0.92f, 0.30f, bodyColor)
+        drawCube(guardianX, baseY + 1.90f, 4.48f, 0.36f, 0.40f, 0.28f, bodyColor)
+        drawCube(guardianX - 0.18f, baseY + 1.94f, 4.22f, 0.05f, 0.05f, 0.05f, eyeGlow)
+        drawCube(guardianX + 0.18f, baseY + 1.94f, 4.22f, 0.05f, 0.05f, 0.05f, eyeGlow)
+        drawCube(guardianX - 0.28f, baseY + 1.18f, 4.54f, 0.10f, 0.62f, 0.10f, bodyColor, rotationX = stride)
+        drawCube(guardianX + 0.28f, baseY + 1.18f, 4.54f, 0.10f, 0.62f, 0.10f, bodyColor, rotationX = -stride)
+        drawCube(guardianX - 0.12f, baseY + 0.30f, 4.54f, 0.12f, 0.72f, 0.12f, bodyColor, rotationX = -stride * 1.2f)
+        drawCube(guardianX + 0.12f, baseY + 0.30f, 4.54f, 0.12f, 0.72f, 0.12f, bodyColor, rotationX = stride * 1.2f)
     }
 
     private fun drawCube(

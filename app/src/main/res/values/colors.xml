@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="game_background">#040711</color>
-    <color name="panel_fill">#D9132034</color>
-    <color name="panel_stroke">#66E2E8F0</color>
-    <color name="accent">#4ADEDE</color>
-    <color name="accent_dark">#083344</color>
-    <color name="text_primary">#F8FAFC</color>
-    <color name="text_secondary">#CBD5E1</color>
+    <color name="game_background">#070B11</color>
+    <color name="panel_fill">#D90F131A</color>
+    <color name="panel_fill_deep">#F0121922</color>
+    <color name="panel_stroke">#66E7C87A</color>
+    <color name="accent">#E7C87A</color>
+    <color name="accent_dark">#24170A</color>
+    <color name="accent_secondary">#7CC7C9</color>
+    <color name="text_primary">#F8F3E5</color>
+    <color name="text_secondary">#D7D0C2</color>
 </resources>
