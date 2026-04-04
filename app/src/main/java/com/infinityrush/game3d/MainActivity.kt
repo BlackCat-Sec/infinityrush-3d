@@ -1,6 +1,6 @@
 package com.infinityrush.game3d
 
-import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import kotlin.math.min
 
 class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
     private lateinit var gameView: GameSurfaceView
@@ -24,17 +25,20 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
     private lateinit var scoreText: TextView
     private lateinit var coinsText: TextView
     private lateinit var speedText: TextView
+    private lateinit var levelText: TextView
     private lateinit var missionText: TextView
     private lateinit var powerText: TextView
     private lateinit var finalScoreText: TextView
     private lateinit var highScoreText: TextView
     private lateinit var selectedSkinText: TextView
     private lateinit var startBankText: TextView
+    private lateinit var startLevelText: TextView
     private lateinit var startSkinText: TextView
     private lateinit var startUnlockText: TextView
     private lateinit var startMissionText: TextView
     private lateinit var startRewardText: TextView
     private lateinit var totalCoinsText: TextView
+    private lateinit var gameOverLevelText: TextView
     private lateinit var gameOverSkinText: TextView
     private lateinit var gameOverUnlockText: TextView
     private lateinit var gameOverMissionText: TextView
@@ -52,12 +56,12 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContentView(R.layout.activity_main)
         bindViews()
+        applyResponsivePanels()
         bindEvents()
         gameView.setUiListener(this)
         hideSystemBars()
@@ -71,6 +75,8 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
                 coins = 0,
                 totalCoins = GamePreferences.getTotalCoins(this),
                 speedKph = 0,
+                level = 1,
+                zoneName = zoneNameForLevel(1),
                 selectedHero = hero.displayName,
                 selectedHeroTitle = hero.title,
                 nextUnlock = nextUnlockText(GamePreferences.getTotalCoins(this)),
@@ -91,12 +97,19 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
     override fun onResume() {
         super.onResume()
         hideSystemBars()
+        applyResponsivePanels()
         gameView.resumeForLifecycle()
     }
 
     override fun onPause() {
         gameView.pauseForLifecycle()
         super.onPause()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyResponsivePanels()
+        hideSystemBars()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -120,17 +133,20 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
         scoreText = findViewById(R.id.scoreText)
         coinsText = findViewById(R.id.coinsText)
         speedText = findViewById(R.id.speedText)
+        levelText = findViewById(R.id.levelText)
         missionText = findViewById(R.id.missionText)
         powerText = findViewById(R.id.powerText)
         finalScoreText = findViewById(R.id.finalScoreText)
         highScoreText = findViewById(R.id.highScoreText)
         selectedSkinText = findViewById(R.id.selectedSkinText)
         startBankText = findViewById(R.id.startBankText)
+        startLevelText = findViewById(R.id.startLevelText)
         startSkinText = findViewById(R.id.startSkinText)
         startUnlockText = findViewById(R.id.startUnlockText)
         startMissionText = findViewById(R.id.startMissionText)
         startRewardText = findViewById(R.id.startRewardText)
         totalCoinsText = findViewById(R.id.totalCoinsText)
+        gameOverLevelText = findViewById(R.id.gameOverLevelText)
         gameOverSkinText = findViewById(R.id.gameOverSkinText)
         gameOverUnlockText = findViewById(R.id.gameOverUnlockText)
         gameOverMissionText = findViewById(R.id.gameOverMissionText)
@@ -168,17 +184,20 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
         scoreText.text = "${getString(R.string.hud_score)} ${snapshot.score}"
         coinsText.text = "${getString(R.string.hud_coins)} ${snapshot.coins}"
         speedText.text = "${getString(R.string.hud_speed)} ${snapshot.speedKph} km/h"
+        levelText.text = getString(R.string.level_zone_format, snapshot.level, snapshot.zoneName)
         missionText.text = snapshot.activeMission
         powerText.text = snapshot.activePowerUp
         finalScoreText.text = getString(R.string.final_score_format, snapshot.score)
         highScoreText.text = getString(R.string.best_run_format, snapshot.highScore)
         selectedSkinText.text = heroText(snapshot.selectedHero, snapshot.selectedHeroTitle)
         startBankText.text = getString(R.string.total_coins_format, snapshot.totalCoins)
+        startLevelText.text = getString(R.string.level_zone_format, snapshot.level, snapshot.zoneName)
         startSkinText.text = heroText(snapshot.selectedHero, snapshot.selectedHeroTitle)
         startUnlockText.text = getString(R.string.next_unlock_format, snapshot.nextUnlock)
         startMissionText.text = snapshot.activeMission
         startRewardText.text = snapshot.activeMissionReward
         totalCoinsText.text = getString(R.string.total_coins_format, snapshot.totalCoins)
+        gameOverLevelText.text = getString(R.string.level_zone_format, snapshot.level, snapshot.zoneName)
         gameOverSkinText.text = heroText(snapshot.selectedHero, snapshot.selectedHeroTitle)
         gameOverUnlockText.text = getString(R.string.next_unlock_format, snapshot.nextUnlock)
         gameOverMissionText.text = snapshot.activeMission
@@ -224,6 +243,25 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
         }
     }
 
+    private fun applyResponsivePanels() {
+        val screenWidth = resources.displayMetrics.widthPixels
+        setPanelWidth(settingsStrip, screenWidth, 460)
+        setPanelWidth(startOverlay, screenWidth, 420)
+        setPanelWidth(pauseOverlay, screenWidth, 360)
+        setPanelWidth(gameOverOverlay, screenWidth, 390)
+    }
+
+    private fun setPanelWidth(panel: View, screenWidth: Int, maxWidthDp: Int) {
+        val width = min((screenWidth * 0.92f).toInt(), dp(maxWidthDp))
+        panel.layoutParams = panel.layoutParams.apply {
+            this.width = width
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+
     private fun hideSystemBars() {
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -248,8 +286,28 @@ class MainActivity : AppCompatActivity(), GameRenderer.UiListener {
 
     private fun currentMission(): MissionDefinition {
         val missions = AdventureContent.missions
+        if (missions.isEmpty()) {
+            return MissionDefinition(
+                type = MissionType.SURVIVE_DISTANCE,
+                title = "Warm Up",
+                description = "Stay alive long enough to scout the route.",
+                target = 150,
+                rewardCoins = 40
+            )
+        }
         val index = GamePreferences.getMissionIndex(this).mod(missions.size)
         return missions[index]
+    }
+
+    private fun zoneNameForLevel(level: Int): String {
+        return when (level) {
+            1, 2 -> "Temple Gate"
+            3, 4 -> "Sunfire Causeway"
+            5, 6 -> "Relic Vault"
+            7, 8 -> "Moonlit Quarry"
+            9, 10 -> "Storm Bridge"
+            else -> "Sky Ruins"
+        }
     }
 
     private fun heroText(name: String, title: String): String {

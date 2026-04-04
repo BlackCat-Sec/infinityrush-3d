@@ -1,13 +1,14 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Infinity Rush 3D</string>
     <string name="hud_score">Score</string>
     <string name="hud_best">Best</string>
     <string name="hud_coins">Coins</string>
     <string name="hud_speed">Speed</string>
+    <string name="level_zone_format">Level %1$d - %2$s</string>
     <string name="start_title">Infinity Rush 3D</string>
-    <string name="start_subtitle">An adventure runner through ruined temples with named heroes, relic quests, dangerous traps, and a more cinematic 3D chase.</string>
-    <string name="start_controls">Swipe left or right to change lanes, tap to jump, and swipe down to slide under gates. Catch relic boosts, dodge spike traps, and outrun rolling boulders.</string>
+    <string name="start_subtitle">A richer adventure runner through ruined temples with named heroes, adaptive layouts, milestone rewards, relic quests, and dangerous cinematic traps.</string>
+    <string name="start_controls">Swipe left or right to change lanes, tap to jump, and swipe down to slide under gates. Catch relic boosts, dodge spike traps, outrun rolling boulders, and push deeper into new danger zones.</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="resume">Resume</string>
@@ -15,7 +16,7 @@
     <string name="paused">Paused</string>
     <string name="paused_subtitle">Catch your breath, swap heroes, tune the audio, and jump back into the run.</string>
     <string name="game_over">Run Over</string>
-    <string name="game_over_subtitle">The upgraded course now rewards long runs with quest progress, hero unlocks, and dangerous temple traps.</string>
+    <string name="game_over_subtitle">Longer runs now unlock higher adventure tiers, tougher zones, and milestone coin rewards on the course.</string>
     <string name="music">Music</string>
     <string name="sfx">Sound FX</string>
     <string name="change_suit">Change Hero</string>

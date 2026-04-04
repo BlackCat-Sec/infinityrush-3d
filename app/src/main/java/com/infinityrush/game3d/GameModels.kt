@@ -33,6 +33,8 @@ data class GameSnapshot(
     val coins: Int,
     val totalCoins: Int,
     val speedKph: Int,
+    val level: Int,
+    val zoneName: String,
     val selectedHero: String,
     val selectedHeroTitle: String,
     val nextUnlock: String,

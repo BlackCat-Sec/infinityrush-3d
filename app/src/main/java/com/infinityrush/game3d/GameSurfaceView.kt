@@ -5,6 +5,7 @@ import android.opengl.GLSurfaceView
 import android.util.AttributeSet
 import android.view.MotionEvent
 import kotlin.math.abs
+import kotlin.math.min
 
 class GameSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -68,6 +69,11 @@ class GameSurfaceView @JvmOverloads constructor(
 
     @Suppress("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val referenceSize = min(width.coerceAtLeast(1), height.coerceAtLeast(1)).toFloat()
+        val verticalSwipeThreshold = (referenceSize * 0.12f).coerceAtLeast(96f)
+        val horizontalSwipeThreshold = (width.coerceAtLeast(1) * 0.10f).coerceAtLeast(88f)
+        val tapTravelThreshold = (referenceSize * 0.08f).coerceAtLeast(60f)
+
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchDownX = event.x
@@ -80,7 +86,7 @@ class GameSurfaceView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 val deltaX = event.x - touchDownX
                 val deltaY = event.y - touchDownY
-                if (!gestureHandled && abs(deltaY) > abs(deltaX) && deltaY > 120f) {
+                if (!gestureHandled && abs(deltaY) > abs(deltaX) && deltaY > verticalSwipeThreshold) {
                     queueEvent { rendererImpl.onSwipe(SwipeDirection.DOWN) }
                     gestureHandled = true
                 }
@@ -94,7 +100,7 @@ class GameSurfaceView @JvmOverloads constructor(
 
                 if (!gestureHandled) {
                     when {
-                        abs(deltaX) > abs(deltaY) && abs(deltaX) > 110f -> {
+                        abs(deltaX) > abs(deltaY) && abs(deltaX) > horizontalSwipeThreshold -> {
                             queueEvent {
                                 rendererImpl.onSwipe(
                                     if (deltaX > 0f) SwipeDirection.RIGHT else SwipeDirection.LEFT
@@ -102,7 +108,7 @@ class GameSurfaceView @JvmOverloads constructor(
                             }
                         }
 
-                        duration < 220L && abs(deltaY) < 90f -> {
+                        duration < 260L && abs(deltaX) < tapTravelThreshold && abs(deltaY) < tapTravelThreshold -> {
                             queueEvent { rendererImpl.onTap() }
                         }
                     }

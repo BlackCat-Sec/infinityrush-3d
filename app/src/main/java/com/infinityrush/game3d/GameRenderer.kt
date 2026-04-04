@@ -1,4 +1,4 @@
-﻿package com.infinityrush.game3d
+package com.infinityrush.game3d
 
 import android.content.Context
 import android.opengl.GLES20
@@ -29,7 +29,6 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private val projectionMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
     private val modelMatrix = FloatArray(16)
-    private val vpMatrix = FloatArray(16)
     private val mvpMatrix = FloatArray(16)
     private val tempMatrix = FloatArray(16)
 
@@ -56,6 +55,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private var speed = 18f
     private var distance = 0f
     private var runCoinsBanked = false
+    private var currentLevel = 1
+    private var screenAspectRatio = 16f / 9f
 
     private var runnerLane = 0
     private var targetLane = 0
@@ -113,8 +114,9 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
-        val aspectRatio = width.toFloat() / height.toFloat()
-        Matrix.perspectiveM(projectionMatrix, 0, 56f, aspectRatio, 0.1f, 180f)
+        screenAspectRatio = width.toFloat() / height.toFloat()
+        val fieldOfView = if (screenAspectRatio < 1f) 66f else 56f
+        Matrix.perspectiveM(projectionMatrix, 0, fieldOfView, screenAspectRatio, 0.1f, 180f)
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -145,6 +147,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         speed = 18f
         distance = 0f
         runCoinsBanked = false
+        currentLevel = 1
         runnerLane = 0
         targetLane = 0
         runnerX = 0f
@@ -258,8 +261,13 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         worldPulse += deltaSeconds * (1f + speed * 0.015f)
         rewardBannerTimer = (rewardBannerTimer - deltaSeconds).coerceAtLeast(0f)
         distance += speed * deltaSeconds
-        speed = min(43f, speed + deltaSeconds * 0.58f)
-        score = max(score, (distance * 6.8f).toInt() + coinsCollected * 20)
+        val reachedLevel = levelForDistance(distance)
+        if (reachedLevel > currentLevel) {
+            advanceToLevel(reachedLevel)
+        }
+
+        speed = min(46f, speed + deltaSeconds * (0.58f + currentLevel * 0.015f))
+        score = max(score, (distance * 6.8f).toInt() + coinsCollected * 20 + currentLevel * 12)
 
         updateMissionAbsolute(MissionType.SURVIVE_DISTANCE, distance.toInt())
 
@@ -324,7 +332,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val recommendedLane = spawnPattern()
         maybeSpawnPowerUp(recommendedLane)
 
-        val baseInterval = (2.2f - (speed - 18f) * 0.025f).coerceAtLeast(1.2f)
+        val baseInterval = (2.2f - (speed - 18f) * 0.025f - (currentLevel - 1) * 0.035f).coerceAtLeast(0.95f)
         spawnTimer = baseInterval + random.nextFloat() * 0.35f
     }
 
@@ -573,17 +581,20 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES20.glUniform3fv(lightDirectionHandle, 1, lightDirection, 0)
 
         val cameraBob = sin(runAnimationTime * 0.55f) * 0.08f
-        val cameraX = runnerX * 0.24f
-        val cameraY = if (slideTimer > 0f) 3.0f else 3.42f + runnerY * 0.12f
+        val portraitCamera = screenAspectRatio < 1f
+        val cameraDistance = if (portraitCamera) 11.6f else 9.0f
+        val cameraX = runnerX * if (portraitCamera) 0.18f else 0.24f
+        val cameraY = (if (slideTimer > 0f) 3.0f else 3.42f + runnerY * 0.12f) + if (portraitCamera) 0.16f else 0f
+        val lookAheadZ = if (portraitCamera) -15.5f else -13f
         Matrix.setLookAtM(
             viewMatrix,
             0,
             cameraX,
             cameraY + cameraBob,
-            9.0f,
+            cameraDistance,
             runnerX * 0.18f,
             groundY + 1.22f + runnerY * 0.12f,
-            -13f,
+            lookAheadZ,
             0f,
             1f,
             0f
@@ -941,6 +952,33 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         lastPersistedMissionProgress = missionProgress
     }
 
+    private fun levelForDistance(distanceCovered: Float): Int {
+        return (distanceCovered / 140f).toInt() + 1
+    }
+
+    private fun advanceToLevel(newLevel: Int) {
+        while (currentLevel < newLevel) {
+            currentLevel += 1
+            val rewardCoins = 12 + currentLevel * 4
+            bankedCoins += rewardCoins
+            GamePreferences.saveTotalCoins(context, bankedCoins)
+            rewardBanner = "Level $currentLevel reached in ${zoneNameForLevel(currentLevel)}: +$rewardCoins coins"
+            rewardBannerTimer = 3.4f
+        }
+        ensureSelectedHeroUnlocked()
+    }
+
+    private fun zoneNameForLevel(level: Int): String {
+        return when (level) {
+            1, 2 -> "Temple Gate"
+            3, 4 -> "Sunfire Causeway"
+            5, 6 -> "Relic Vault"
+            7, 8 -> "Moonlit Quarry"
+            9, 10 -> "Storm Bridge"
+            else -> "Sky Ruins"
+        }
+    }
+
     private fun nextUnlockLabel(): String {
         val totalCoins = effectiveTotalCoins()
         val nextHero = RunnerCharacter.entries.firstOrNull { totalCoins < it.unlockCoins }
@@ -981,7 +1019,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private fun dispatchSnapshot(force: Boolean) {
         val now = System.currentTimeMillis()
-        if (!force && now - lastSnapshotDispatchTime < 100L) {
+        if (!force && now - lastSnapshotDispatchTime < 140L) {
             return
         }
 
@@ -993,6 +1031,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             coins = coinsCollected,
             totalCoins = effectiveTotalCoins(),
             speedKph = (speed * 11.5f).toInt(),
+            level = currentLevel,
+            zoneName = zoneNameForLevel(currentLevel),
             selectedHero = selectedHero.displayName,
             selectedHeroTitle = selectedHero.title,
             nextUnlock = nextUnlockLabel(),
@@ -1042,3 +1082,4 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         """
     }
 }
+
