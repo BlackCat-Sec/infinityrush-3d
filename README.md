@@ -1,6 +1,6 @@
 # Infinity Rush 3D
 
-Infinity Rush 3D is a standalone Android endless runner built with Kotlin and OpenGL ES 2.0. It keeps the easy-to-open Android Studio setup from the original project, but upgrades the gameplay into a lane-switching 3D chase runner with jump, slide, coins, power-ups, unlockable suits, skyline scenery, fog, lighting, and a forward camera inspired by arcade runners.
+Infinity Rush 3D is a standalone Android endless runner built with Kotlin and OpenGL ES 2.0. It keeps the easy-to-open Android Studio setup from the original project, but upgrades the gameplay into a lane-switching temple adventure runner with named heroes, quest rewards, relic power-ups, ruin-themed hazards, fog, lighting, and a forward camera inspired by arcade adventure runners.
 
 ## Highlights
 
@@ -8,9 +8,11 @@ Infinity Rush 3D is a standalone Android endless runner built with Kotlin and Op
 - Three-lane 3D endless runner with swipe lane switching
 - Tap to jump and swipe down to slide under gates
 - Procedural obstacle patterns with blockers, hurdles, and slide gates
-- Shield and magnet power-ups for longer, more expressive runs
+- Shield and magnet relic power-ups for longer, more expressive runs
 - Coin pickup rows, speed ramping, persistent high score, and lifetime coin bank
-- Unlockable runner suits with saved selection between sessions
+- Unlockable heroes with saved selection between sessions
+- Quest objectives with persistent progress and coin rewards
+- Temple-themed hazards including spike beds and rolling boulders
 - Start, pause, resume, and game-over overlays
 - Background music and sound effects with saved audio toggles
 - Separate application ID from the 2D game: `com.infinityrush.game3d`
@@ -42,8 +44,9 @@ Infinity Rush 3D is a standalone Android endless runner built with Kotlin and Op
 - Swipe right: move right lane
 - Tap: jump
 - Swipe down: slide
-- Collect shield pickups to absorb one crash
-- Collect magnet pickups to pull nearby coins
+- Collect shield relics to absorb one crash
+- Collect magnet relics to pull nearby coins
+- Complete quests to earn extra reward coins and unlock more heroes
 - Pause button: pause the run
 
 ## Build Outputs

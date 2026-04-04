@@ -46,7 +46,10 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private var runnerState = RunnerState.START
     private var highScore = GamePreferences.getHighScore(context)
     private var bankedCoins = GamePreferences.getTotalCoins(context)
-    private var selectedSkin = GamePreferences.getSelectedSkin(context)
+    private var selectedHero = GamePreferences.getSelectedHero(context)
+    private var missionIndex = GamePreferences.getMissionIndex(context)
+    private var missionProgress = GamePreferences.getMissionProgress(context)
+    private var lastPersistedMissionProgress = missionProgress
 
     private var score = 0
     private var coinsCollected = 0
@@ -69,6 +72,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private var powerUpSpawnTimer = 7.5f
     private var shieldTimer = 0f
     private var magnetTimer = 0f
+    private var rewardBannerTimer = 0f
+    private var rewardBanner = ""
 
     private val obstacles = mutableListOf<Obstacle>()
     private val coins = mutableListOf<Coin>()
@@ -79,9 +84,9 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private val laneWidth = 2.35f
     private val groundY = -1.15f
-    private val spawnZ = -72f
-    private val fogColor = floatArrayOf(0.07f, 0.11f, 0.18f, 1f)
-    private val lightDirection = floatArrayOf(-0.35f, 0.9f, 0.25f)
+    private val spawnZ = -74f
+    private val fogColor = floatArrayOf(0.08f, 0.10f, 0.08f, 1f)
+    private val lightDirection = floatArrayOf(-0.28f, 0.9f, 0.22f)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
@@ -100,7 +105,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         lightDirectionHandle = GLES20.glGetUniformLocation(shaderProgram, "uLightDirection")
 
         cubeMesh = CubeMesh()
-        ensureSelectedSkinUnlocked()
+        normalizeMissionState()
+        ensureSelectedHeroUnlocked()
         soundManager.startMusic()
         dispatchSnapshot(force = true)
     }
@@ -132,7 +138,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     fun startRun() {
-        ensureSelectedSkinUnlocked()
+        ensureSelectedHeroUnlocked()
         runnerState = RunnerState.RUNNING
         score = 0
         coinsCollected = 0
@@ -154,6 +160,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         powerUpSpawnTimer = 7.5f
         shieldTimer = 0f
         magnetTimer = 0f
+        rewardBannerTimer = 0f
+        rewardBanner = ""
         obstacles.clear()
         coins.clear()
         powerUps.clear()
@@ -166,6 +174,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (runnerState == RunnerState.RUNNING) {
             runnerState = RunnerState.PAUSED
             soundManager.pauseMusic()
+            persistMissionState(force = true)
             dispatchSnapshot(force = true)
         }
     }
@@ -180,14 +189,14 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     fun cycleSkin() {
-        val unlockedSkins = unlockedSkins()
-        if (unlockedSkins.isEmpty()) {
+        val unlockedHeroes = unlockedHeroes()
+        if (unlockedHeroes.isEmpty()) {
             return
         }
 
-        val currentIndex = unlockedSkins.indexOf(selectedSkin).let { if (it == -1) 0 else it }
-        selectedSkin = unlockedSkins[(currentIndex + 1) % unlockedSkins.size]
-        GamePreferences.saveSelectedSkin(context, selectedSkin)
+        val currentIndex = unlockedHeroes.indexOf(selectedHero).let { if (it == -1) 0 else it }
+        selectedHero = unlockedHeroes[(currentIndex + 1) % unlockedHeroes.size]
+        GamePreferences.saveSelectedHero(context, selectedHero)
         dispatchSnapshot(force = true)
     }
 
@@ -206,6 +215,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             runnerState = RunnerState.PAUSED
         }
         soundManager.pauseMusic()
+        persistMissionState(force = true)
         dispatchSnapshot(force = true)
     }
 
@@ -237,17 +247,21 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private fun updatePresentation(deltaSeconds: Float) {
         runAnimationTime += deltaSeconds * 4f
-        coinSpin += deltaSeconds * 140f
-        worldPulse += deltaSeconds * 0.8f
+        coinSpin += deltaSeconds * 120f
+        worldPulse += deltaSeconds * 0.75f
+        rewardBannerTimer = (rewardBannerTimer - deltaSeconds).coerceAtLeast(0f)
     }
 
     private fun updateRunning(deltaSeconds: Float) {
         runAnimationTime += deltaSeconds * (speed * 0.22f)
-        coinSpin += deltaSeconds * 190f
+        coinSpin += deltaSeconds * 170f
         worldPulse += deltaSeconds * (1f + speed * 0.015f)
+        rewardBannerTimer = (rewardBannerTimer - deltaSeconds).coerceAtLeast(0f)
         distance += speed * deltaSeconds
-        speed = min(42f, speed + deltaSeconds * 0.55f)
-        score = max(score, (distance * 6.5f).toInt() + coinsCollected * 20)
+        speed = min(43f, speed + deltaSeconds * 0.58f)
+        score = max(score, (distance * 6.8f).toInt() + coinsCollected * 20)
+
+        updateMissionAbsolute(MissionType.SURVIVE_DISTANCE, distance.toInt())
 
         powerUpSpawnTimer = (powerUpSpawnTimer - deltaSeconds).coerceAtLeast(0f)
         shieldTimer = (shieldTimer - deltaSeconds).coerceAtLeast(0f)
@@ -298,6 +312,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         updateObstacles(deltaSeconds)
         updatePowerUps(deltaSeconds)
         updateCoins(deltaSeconds)
+        persistMissionState(force = false)
     }
 
     private fun updatePatterns(deltaSeconds: Float) {
@@ -316,11 +331,13 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private fun spawnPattern(): Int {
         val roll = random.nextInt(100)
         return when {
-            roll < 20 -> spawnSingleBlocker()
-            roll < 38 -> spawnHurdleRow()
-            roll < 54 -> spawnGateRow()
-            roll < 70 -> spawnSplitLanePattern()
-            roll < 86 -> spawnCoinTunnel()
+            roll < 16 -> spawnSingleBlocker()
+            roll < 30 -> spawnHurdleRow()
+            roll < 42 -> spawnGateRow()
+            roll < 56 -> spawnSpikeField()
+            roll < 70 -> spawnBoulderCharge()
+            roll < 82 -> spawnSplitLanePattern()
+            roll < 92 -> spawnTempleCombo()
             else -> spawnStaggeredMix()
         }
     }
@@ -328,23 +345,40 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private fun spawnSingleBlocker(): Int {
         val lane = randomLane()
         val safeLane = openLaneExcluding(setOf(lane))
-        obstacles += Obstacle(lane, ObstacleType.BLOCKER, spawnZ, 1.65f, 2.6f, 1.3f)
+        obstacles += Obstacle(lane, ObstacleType.BLOCKER, spawnZ, 1.65f, 2.7f, 1.3f)
         spawnCoinsInLane(safeLane, spawnZ - 10f, 4, 6f, 0.7f)
         return safeLane
     }
 
     private fun spawnHurdleRow(): Int {
         val lane = randomLane()
-        obstacles += Obstacle(lane, ObstacleType.HURDLE, spawnZ, 1.45f, 1.05f, 1.0f)
-        spawnCoinsInLane(lane, spawnZ - 9f, 5, 5.8f, 0.85f)
+        obstacles += Obstacle(lane, ObstacleType.HURDLE, spawnZ, 1.5f, 1.15f, 1.0f)
+        spawnCoinsInLane(lane, spawnZ - 10f, 5, 5.7f, 0.9f)
         return lane
     }
 
     private fun spawnGateRow(): Int {
         val lane = randomLane()
-        obstacles += Obstacle(lane, ObstacleType.GATE, spawnZ, 1.65f, 2.25f, 1.05f)
+        obstacles += Obstacle(lane, ObstacleType.GATE, spawnZ, 1.7f, 2.3f, 1.05f)
         spawnCoinsInLane(lane, spawnZ - 12f, 4, 6f, 0.55f)
         return lane
+    }
+
+    private fun spawnSpikeField(): Int {
+        val safeLane = randomLane()
+        (-1..1).filter { it != safeLane }.forEachIndexed { index, lane ->
+            obstacles += Obstacle(lane, ObstacleType.SPIKE, spawnZ - index * 5.5f, 1.7f, 0.95f, 1.1f)
+        }
+        spawnCoinsInLane(safeLane, spawnZ - 6f, 5, 5.4f, 0.78f)
+        return safeLane
+    }
+
+    private fun spawnBoulderCharge(): Int {
+        val lane = randomLane()
+        val safeLane = openLaneExcluding(setOf(lane))
+        obstacles += Obstacle(lane, ObstacleType.BOULDER, spawnZ, 1.55f, 1.55f, 1.55f)
+        spawnCoinsInLane(safeLane, spawnZ - 9f, 5, 5.6f, 0.82f)
+        return safeLane
     }
 
     private fun spawnSplitLanePattern(): Int {
@@ -352,23 +386,25 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         (-1..1).filter { it != safeLane }.forEach { lane ->
             obstacles += Obstacle(
                 lane = lane,
-                type = ObstacleType.BLOCKER,
+                type = if (random.nextBoolean()) ObstacleType.BLOCKER else ObstacleType.SPIKE,
                 z = spawnZ - if (lane < safeLane) 0f else 6f,
                 width = 1.65f,
-                height = 2.6f,
-                depth = 1.3f
+                height = if (lane < safeLane) 2.6f else 0.95f,
+                depth = 1.2f
             )
         }
-        spawnCoinsInLane(safeLane, spawnZ - 6f, 6, 5.5f, 0.7f)
+        spawnCoinsInLane(safeLane, spawnZ - 6f, 6, 5.4f, 0.72f)
         return safeLane
     }
 
-    private fun spawnCoinTunnel(): Int {
+    private fun spawnTempleCombo(): Int {
         val lane = randomLane()
-        obstacles += Obstacle(lane, ObstacleType.HURDLE, spawnZ, 1.45f, 1.05f, 1.0f)
-        obstacles += Obstacle(lane, ObstacleType.GATE, spawnZ - 18f, 1.65f, 2.25f, 1.05f)
-        spawnCoinsInLane(lane, spawnZ - 5f, 7, 4.8f, 0.8f)
-        return lane
+        val supportLane = openLaneExcluding(setOf(lane))
+        obstacles += Obstacle(lane, ObstacleType.GATE, spawnZ, 1.7f, 2.3f, 1.05f)
+        obstacles += Obstacle(supportLane, ObstacleType.SPIKE, spawnZ - 12f, 1.7f, 0.95f, 1.1f)
+        obstacles += Obstacle(lane, ObstacleType.BOULDER, spawnZ - 22f, 1.55f, 1.55f, 1.55f)
+        spawnCoinsInLane(oppositeLane(supportLane), spawnZ - 8f, 5, 5.1f, 0.76f)
+        return oppositeLane(supportLane)
     }
 
     private fun spawnStaggeredMix(): Int {
@@ -378,13 +414,13 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         obstacles += Obstacle(firstLane, ObstacleType.BLOCKER, spawnZ, 1.65f, 2.6f, 1.3f)
         obstacles += Obstacle(
             secondLane,
-            if (random.nextBoolean()) ObstacleType.HURDLE else ObstacleType.GATE,
-            spawnZ - 14f,
+            if (random.nextBoolean()) ObstacleType.HURDLE else ObstacleType.SPIKE,
+            spawnZ - 13f,
             1.5f,
-            2.1f,
+            if (secondLane == 0) 1.0f else 0.95f,
             1.05f
         )
-        spawnCoinsInLane(safeLane, spawnZ - 8f, 5, 5.6f, 0.75f)
+        spawnCoinsInLane(safeLane, spawnZ - 8f, 5, 5.5f, 0.78f)
         return safeLane
     }
 
@@ -405,7 +441,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             z = spawnZ - 18f,
             height = if (preferredType == PowerUpType.SHIELD) 1.1f else 0.95f
         )
-        powerUpSpawnTimer = 8.5f + random.nextFloat() * 4.5f
+        powerUpSpawnTimer = 8.8f + random.nextFloat() * 4.4f
     }
 
     private fun updateObstacles(deltaSeconds: Float) {
@@ -413,16 +449,23 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         while (iterator.hasNext()) {
             val obstacle = iterator.next()
             obstacle.z += speed * deltaSeconds
+            if (obstacle.type == ObstacleType.BOULDER) {
+                obstacle.spin += deltaSeconds * 260f
+            }
+
             if (obstacle.z > 10f) {
                 iterator.remove()
+                updateMissionIncrement(MissionType.DODGE_HAZARDS, 1)
                 continue
             }
 
-            if (abs(obstacle.z) < obstacle.depth * 1.4f && abs(runnerX - laneToX(obstacle.lane)) < laneWidth * 0.4f) {
+            if (abs(obstacle.z) < obstacle.depth * 1.45f && abs(runnerX - obstacleX(obstacle)) < laneWidth * 0.4f) {
                 val collisionIsActive = when (obstacle.type) {
-                    ObstacleType.HURDLE -> runnerY < obstacle.height + 0.25f
+                    ObstacleType.HURDLE -> runnerY < obstacle.height + 0.3f
                     ObstacleType.GATE -> slideTimer <= 0f
-                    ObstacleType.BLOCKER -> true
+                    ObstacleType.SPIKE -> runnerY < obstacle.height + 0.28f
+                    ObstacleType.BLOCKER,
+                    ObstacleType.BOULDER -> true
                 }
 
                 if (!collisionIsActive) {
@@ -432,6 +475,8 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 if (shieldTimer > 0f) {
                     shieldTimer = 0f
                     iterator.remove()
+                    rewardBanner = "Shield blocked a fatal hit"
+                    rewardBannerTimer = 2.2f
                     continue
                 }
 
@@ -462,9 +507,12 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private fun activatePowerUp(type: PowerUpType) {
         when (type) {
             PowerUpType.SHIELD -> shieldTimer = 7.5f
-            PowerUpType.MAGNET -> magnetTimer = 8.5f
+            PowerUpType.MAGNET -> magnetTimer = 8.8f
         }
         score += 120
+        updateMissionIncrement(MissionType.USE_POWER_UPS, 1)
+        rewardBanner = if (type == PowerUpType.SHIELD) "Shield relic activated" else "Magnet relic activated"
+        rewardBannerTimer = 2.4f
     }
 
     private fun updateCoins(deltaSeconds: Float) {
@@ -483,6 +531,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 coin.collected = true
                 coinsCollected += 1
                 score += 25
+                updateMissionIncrement(MissionType.COLLECT_COINS, 1)
             }
         }
     }
@@ -493,6 +542,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
 
         persistRunCoinsIfNeeded()
+        persistMissionState(force = true)
         runnerState = RunnerState.GAME_OVER
         soundManager.playCrash()
         soundManager.pauseMusic()
@@ -502,7 +552,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             GamePreferences.saveHighScore(context, highScore)
         }
 
-        ensureSelectedSkinUnlocked()
+        ensureSelectedHeroUnlocked()
         dispatchSnapshot(force = true)
     }
 
@@ -523,22 +573,21 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES20.glUniform3fv(lightDirectionHandle, 1, lightDirection, 0)
 
         val cameraBob = sin(runAnimationTime * 0.55f) * 0.08f
-        val cameraX = runnerX * 0.26f
-        val cameraY = if (slideTimer > 0f) 2.95f else 3.35f + runnerY * 0.12f
+        val cameraX = runnerX * 0.24f
+        val cameraY = if (slideTimer > 0f) 3.0f else 3.42f + runnerY * 0.12f
         Matrix.setLookAtM(
             viewMatrix,
             0,
             cameraX,
             cameraY + cameraBob,
-            8.8f,
+            9.0f,
             runnerX * 0.18f,
-            groundY + 1.2f + runnerY * 0.12f,
+            groundY + 1.22f + runnerY * 0.12f,
             -13f,
             0f,
             1f,
             0f
         )
-        Matrix.multiplyMM(vpMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
 
         drawTrack()
         drawEnvironment()
@@ -550,74 +599,81 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private fun drawTrack() {
         val segmentLength = 10f
-        val trackWidth = laneWidth * 3.3f
+        val trackWidth = laneWidth * 3.35f
         val scroll = distance % segmentLength
 
         for (index in 0..16) {
             val centerZ = scroll - index * segmentLength - 6f
-            val accentColor = if (index % 2 == 0) color(0.15f, 0.20f, 0.31f) else color(0.12f, 0.16f, 0.27f)
-            drawCube(0f, groundY - 0.12f, centerZ, trackWidth, 0.14f, segmentLength, accentColor)
-            drawCube(-laneWidth, groundY - 0.02f, centerZ, 0.05f, 0.03f, segmentLength, color(0.25f, 0.70f, 0.82f))
-            drawCube(0f, groundY - 0.02f, centerZ, 0.05f, 0.03f, segmentLength, color(0.25f, 0.70f, 0.82f))
-            drawCube(laneWidth, groundY - 0.02f, centerZ, 0.05f, 0.03f, segmentLength, color(0.25f, 0.70f, 0.82f))
-            drawCube(-trackWidth * 0.52f, groundY + 0.45f, centerZ, 0.18f, 0.9f, segmentLength, color(0.07f, 0.11f, 0.2f))
-            drawCube(trackWidth * 0.52f, groundY + 0.45f, centerZ, 0.18f, 0.9f, segmentLength, color(0.07f, 0.11f, 0.2f))
+            val stoneColor = if (index % 2 == 0) color(0.23f, 0.22f, 0.18f) else color(0.20f, 0.19f, 0.16f)
+            drawCube(0f, groundY - 0.12f, centerZ, trackWidth, 0.14f, segmentLength, stoneColor)
+            drawCube(-laneWidth, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
+            drawCube(0f, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
+            drawCube(laneWidth, groundY - 0.02f, centerZ, 0.07f, 0.03f, segmentLength, color(0.68f, 0.58f, 0.32f))
+            drawCube(-trackWidth * 0.52f, groundY + 0.5f, centerZ, 0.26f, 1.0f, segmentLength, color(0.12f, 0.11f, 0.09f))
+            drawCube(trackWidth * 0.52f, groundY + 0.5f, centerZ, 0.26f, 1.0f, segmentLength, color(0.12f, 0.11f, 0.09f))
         }
     }
 
     private fun drawEnvironment() {
-        val treeSpacing = 14f
-        val treeScroll = (distance * 0.65f) % treeSpacing
+        val pillarSpacing = 16f
+        val pillarScroll = (distance * 0.72f) % pillarSpacing
         for (index in 0..10) {
-            val z = treeScroll - index * treeSpacing - 8f
-            drawTree(-7f, z, false)
-            drawTree(7f, z - 4f, true)
+            val z = pillarScroll - index * pillarSpacing - 10f
+            drawTemplePillar(-7.2f, z, damaged = index % 2 == 0)
+            drawTemplePillar(7.2f, z - 4.5f, damaged = index % 2 != 0)
+            drawTorch(-5.4f, z + 2f)
+            drawTorch(5.4f, z - 1f)
         }
 
-        val archSpacing = 22f
-        val archScroll = (distance * 0.88f) % archSpacing
+        val archSpacing = 24f
+        val archScroll = (distance * 0.85f) % archSpacing
         for (index in 0..7) {
-            val z = archScroll - index * archSpacing - 15f
-            drawTrackArch(z)
+            val z = archScroll - index * archSpacing - 16f
+            drawTempleArch(z)
         }
 
-        val skylineSpacing = 26f
-        val skylineScroll = (distance * 0.52f) % skylineSpacing
+        val cliffSpacing = 30f
+        val cliffScroll = (distance * 0.48f) % cliffSpacing
         for (index in 0..8) {
-            val z = skylineScroll - index * skylineSpacing - 24f
-            drawSkylineTower(-12.5f, z, 4.4f + (index % 3) * 0.9f, warm = index % 2 == 0)
-            drawSkylineTower(12.5f, z - 6f, 5.0f + (index % 4) * 0.8f, warm = index % 2 != 0)
+            val z = cliffScroll - index * cliffSpacing - 28f
+            drawCliff(-13.5f, z, 4.8f + (index % 3) * 1.1f)
+            drawCliff(13.5f, z - 6f, 5.2f + (index % 4) * 0.8f)
         }
     }
 
-    private fun drawTree(x: Float, z: Float, warmTint: Boolean) {
-        val trunkColor = if (warmTint) color(0.30f, 0.20f, 0.14f) else color(0.22f, 0.17f, 0.11f)
-        val canopyColor = if (warmTint) color(0.30f, 0.48f, 0.34f) else color(0.20f, 0.42f, 0.38f)
-        drawCube(x, groundY + 1.1f, z, 0.48f, 2.2f, 0.48f, trunkColor)
-        drawCube(x, groundY + 2.75f, z, 1.8f, 1.55f, 1.8f, canopyColor)
-        drawCube(x, groundY + 3.55f, z, 1.25f, 0.95f, 1.25f, canopyColor)
+    private fun drawTemplePillar(x: Float, z: Float, damaged: Boolean) {
+        val stone = color(0.33f, 0.30f, 0.24f)
+        drawCube(x, groundY + 1.4f, z, 0.72f, 2.8f, 0.72f, stone)
+        drawCube(x, groundY + 2.95f, z, 0.92f, 0.26f, 0.92f, color(0.40f, 0.36f, 0.29f))
+        drawCube(x, groundY + 0.06f, z, 1.08f, 0.14f, 1.08f, color(0.27f, 0.24f, 0.19f))
+        if (damaged) {
+            drawCube(x + 0.16f, groundY + 2.5f, z + 0.14f, 0.32f, 0.85f, 0.32f, color(0.20f, 0.18f, 0.14f), rotationZ = 14f)
+        }
     }
 
-    private fun drawTrackArch(z: Float) {
-        val frameColor = color(0.18f, 0.29f, 0.44f)
-        val beamColor = color(0.22f, 0.78f, 0.88f, 0.72f)
-        drawCube(-4.25f, groundY + 2.2f, z, 0.24f, 3.3f, 0.24f, frameColor)
-        drawCube(4.25f, groundY + 2.2f, z, 0.24f, 3.3f, 0.24f, frameColor)
-        drawCube(0f, groundY + 3.7f, z, 4.55f, 0.18f, 0.24f, frameColor)
-        drawCube(0f, groundY + 3.18f, z, 3.7f, 0.08f, 0.08f, beamColor)
+    private fun drawTempleArch(z: Float) {
+        val stone = color(0.38f, 0.33f, 0.25f)
+        drawCube(-4.4f, groundY + 2.35f, z, 0.32f, 3.55f, 0.32f, stone)
+        drawCube(4.4f, groundY + 2.35f, z, 0.32f, 3.55f, 0.32f, stone)
+        drawCube(0f, groundY + 4.0f, z, 4.78f, 0.22f, 0.32f, stone)
+        drawCube(0f, groundY + 3.4f, z, 3.4f, 0.12f, 0.08f, color(0.83f, 0.58f, 0.16f, 0.65f))
     }
 
-    private fun drawSkylineTower(x: Float, z: Float, height: Float, warm: Boolean) {
-        val bodyColor = if (warm) color(0.11f, 0.15f, 0.24f) else color(0.09f, 0.13f, 0.20f)
-        val lightColor = if (warm) color(0.92f, 0.62f, 0.28f, 0.68f) else color(0.32f, 0.82f, 0.92f, 0.68f)
-        drawCube(x, groundY + height * 0.5f, z, 2.4f, height, 2.1f, bodyColor)
-        drawCube(x, groundY + height - 0.6f, z + 0.1f, 1.9f, 0.12f, 0.1f, lightColor)
-        drawCube(x, groundY + height - 1.3f, z + 0.1f, 1.9f, 0.12f, 0.1f, lightColor)
+    private fun drawTorch(x: Float, z: Float) {
+        drawCube(x, groundY + 0.8f, z, 0.16f, 1.6f, 0.16f, color(0.23f, 0.17f, 0.10f))
+        val flamePulse = 0.28f + sin(worldPulse * 6.0f + z) * 0.04f
+        drawCube(x, groundY + 1.75f, z, flamePulse, 0.38f, flamePulse, color(0.98f, 0.58f, 0.16f, 0.88f))
+        drawCube(x, groundY + 1.96f, z, flamePulse * 0.62f, 0.22f, flamePulse * 0.62f, color(1f, 0.88f, 0.56f, 0.82f))
+    }
+
+    private fun drawCliff(x: Float, z: Float, height: Float) {
+        drawCube(x, groundY + height * 0.5f, z, 3.0f, height, 2.8f, color(0.15f, 0.16f, 0.12f))
+        drawCube(x + sign(x) * 0.3f, groundY + height - 0.7f, z, 2.0f, 0.28f, 1.8f, color(0.24f, 0.22f, 0.16f))
     }
 
     private fun drawCoins() {
         for (coin in coins) {
-            val pulse = 0.38f + sin((coinSpin + coin.z * 12f) * 0.03f) * 0.04f
+            val pulse = 0.40f + sin((coinSpin + coin.z * 12f) * 0.03f) * 0.05f
             drawCube(
                 x = laneToX(coin.lane),
                 y = groundY + coin.height,
@@ -625,7 +681,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 scaleX = pulse,
                 scaleY = pulse,
                 scaleZ = 0.12f,
-                color = color(0.98f, 0.80f, 0.29f),
+                color = color(0.97f, 0.79f, 0.28f),
                 rotationY = coinSpin + coin.z * 1.5f,
                 rotationZ = 18f
             )
@@ -653,22 +709,35 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private fun drawObstacles() {
         for (obstacle in obstacles) {
-            val x = laneToX(obstacle.lane)
+            val x = obstacleX(obstacle)
             when (obstacle.type) {
                 ObstacleType.HURDLE -> {
-                    drawCube(x, groundY + 0.52f, obstacle.z, 1.3f, 1.04f, 0.72f, color(0.96f, 0.47f, 0.34f))
-                    drawCube(x, groundY + 0.95f, obstacle.z, 1.45f, 0.16f, 1.0f, color(1f, 0.77f, 0.57f))
+                    drawCube(x, groundY + 0.52f, obstacle.z, 1.34f, 1.06f, 0.74f, color(0.63f, 0.26f, 0.16f))
+                    drawCube(x, groundY + 0.96f, obstacle.z, 1.48f, 0.16f, 1.04f, color(0.91f, 0.70f, 0.42f))
                 }
 
                 ObstacleType.GATE -> {
-                    drawCube(x, groundY + 1.75f, obstacle.z, 1.55f, 0.28f, 0.86f, color(0.54f, 0.47f, 0.98f))
-                    drawCube(x - 0.62f, groundY + 0.95f, obstacle.z, 0.24f, 1.85f, 0.24f, color(0.39f, 0.32f, 0.86f))
-                    drawCube(x + 0.62f, groundY + 0.95f, obstacle.z, 0.24f, 1.85f, 0.24f, color(0.39f, 0.32f, 0.86f))
+                    drawCube(x, groundY + 1.78f, obstacle.z, 1.62f, 0.30f, 0.90f, color(0.45f, 0.40f, 0.18f))
+                    drawCube(x - 0.64f, groundY + 0.96f, obstacle.z, 0.26f, 1.9f, 0.26f, color(0.31f, 0.25f, 0.13f))
+                    drawCube(x + 0.64f, groundY + 0.96f, obstacle.z, 0.26f, 1.9f, 0.26f, color(0.31f, 0.25f, 0.13f))
                 }
 
                 ObstacleType.BLOCKER -> {
-                    drawCube(x, groundY + 1.15f, obstacle.z, 1.5f, 2.3f, 1.0f, color(0.83f, 0.20f, 0.28f))
-                    drawCube(x, groundY + 2.25f, obstacle.z, 1.15f, 0.35f, 1.15f, color(1.0f, 0.72f, 0.30f))
+                    drawCube(x, groundY + 1.18f, obstacle.z, 1.58f, 2.34f, 1.06f, color(0.45f, 0.35f, 0.22f))
+                    drawCube(x, groundY + 2.28f, obstacle.z, 1.18f, 0.36f, 1.18f, color(0.82f, 0.63f, 0.30f))
+                    drawCube(x, groundY + 1.16f, obstacle.z + 0.56f, 0.88f, 0.88f, 0.10f, color(0.65f, 0.16f, 0.12f))
+                }
+
+                ObstacleType.SPIKE -> {
+                    drawCube(x, groundY + 0.22f, obstacle.z, 1.72f, 0.14f, 1.10f, color(0.26f, 0.23f, 0.18f))
+                    drawCube(x - 0.46f, groundY + 0.54f, obstacle.z, 0.22f, 0.66f, 0.22f, color(0.72f, 0.72f, 0.70f), rotationZ = -8f)
+                    drawCube(x, groundY + 0.62f, obstacle.z, 0.24f, 0.82f, 0.24f, color(0.74f, 0.74f, 0.72f))
+                    drawCube(x + 0.46f, groundY + 0.54f, obstacle.z, 0.22f, 0.66f, 0.22f, color(0.72f, 0.72f, 0.70f), rotationZ = 8f)
+                }
+
+                ObstacleType.BOULDER -> {
+                    drawCube(x, groundY + 0.88f, obstacle.z, 1.22f, 1.22f, 1.22f, color(0.38f, 0.35f, 0.31f), rotationX = obstacle.spin, rotationZ = obstacle.spin * 0.7f)
+                    drawCube(x, groundY + 0.88f, obstacle.z, 0.72f, 0.72f, 0.72f, color(0.50f, 0.46f, 0.40f), rotationX = obstacle.spin, rotationY = obstacle.spin * 0.5f)
                 }
             }
         }
@@ -678,40 +747,39 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val baseY = groundY + runnerY
         val sideLean = (laneToX(targetLane) - runnerX) * 8f
         val stride = sin(runAnimationTime) * 24f
-        val suitColor = selectedSkin.suitColor
-        val trimColor = selectedSkin.trimColor
-        val accentColor = selectedSkin.accentColor
+        val skinTone = selectedHero.skinTone
+        val hairColor = selectedHero.hairColor
+        val primary = selectedHero.outfitPrimary
+        val secondary = selectedHero.outfitSecondary
+        val gear = selectedHero.gearColor
 
         if (shieldTimer > 0f) {
-            drawCube(
-                runnerX,
-                baseY + 1.55f,
-                0f,
-                1.28f,
-                1.95f,
-                1.18f,
-                color(0.56f, 0.95f, 1f, 0.20f),
-                rotationY = worldPulse * 82f
-            )
+            drawCube(runnerX, baseY + 1.62f, 0f, 1.34f, 2.04f, 1.22f, color(0.56f, 0.95f, 1f, 0.18f), rotationY = worldPulse * 80f)
         }
 
         if (magnetTimer > 0f) {
             val magnetOffset = sin(worldPulse * 4.4f) * 0.18f
-            drawCube(runnerX - 0.78f, baseY + 1.32f, magnetOffset, 0.14f, 0.95f, 0.14f, color(0.99f, 0.58f, 0.29f, 0.62f))
-            drawCube(runnerX + 0.78f, baseY + 1.32f, -magnetOffset, 0.14f, 0.95f, 0.14f, color(0.34f, 0.92f, 0.98f, 0.62f))
+            drawCube(runnerX - 0.82f, baseY + 1.42f, magnetOffset, 0.14f, 1.02f, 0.14f, color(0.99f, 0.58f, 0.29f, 0.62f))
+            drawCube(runnerX + 0.82f, baseY + 1.42f, -magnetOffset, 0.14f, 1.02f, 0.14f, color(0.34f, 0.92f, 0.98f, 0.62f))
         }
 
         if (slideTimer > 0f) {
-            drawCube(runnerX, baseY + 0.52f, 0f, 1.18f, 0.62f, 1.95f, suitColor, rotationY = sideLean)
-            drawCube(runnerX - 0.48f, baseY + 0.72f, 0.18f, 0.42f, 0.42f, 0.42f, trimColor, rotationY = sideLean)
-            drawCube(runnerX + 0.35f, baseY + 0.2f, 0.35f, 0.75f, 0.2f, 0.55f, accentColor, rotationY = sideLean)
+            drawCube(runnerX, baseY + 0.56f, 0f, 1.24f, 0.64f, 1.98f, primary, rotationY = sideLean)
+            drawCube(runnerX, baseY + 0.72f, -0.14f, 0.64f, 0.22f, 1.12f, secondary, rotationY = sideLean)
+            drawCube(runnerX - 0.50f, baseY + 0.78f, 0.18f, 0.44f, 0.44f, 0.44f, skinTone, rotationY = sideLean)
+            drawCube(runnerX + 0.35f, baseY + 0.22f, 0.35f, 0.78f, 0.22f, 0.58f, gear, rotationY = sideLean)
         } else {
-            drawCube(runnerX, baseY + 1.45f, 0f, 0.86f, 1.16f, 0.6f, suitColor, rotationY = sideLean)
-            drawCube(runnerX, baseY + 2.42f, 0.05f, 0.62f, 0.62f, 0.62f, trimColor, rotationY = sideLean)
-            drawCube(runnerX - 0.5f, baseY + 1.48f, 0f, 0.18f, 0.95f, 0.18f, accentColor, rotationX = -stride, rotationY = sideLean)
-            drawCube(runnerX + 0.5f, baseY + 1.48f, 0f, 0.18f, 0.95f, 0.18f, accentColor, rotationX = stride, rotationY = sideLean)
-            drawCube(runnerX - 0.22f, baseY + 0.52f, 0f, 0.22f, 1.02f, 0.22f, accentColor, rotationX = stride * 1.2f, rotationY = sideLean)
-            drawCube(runnerX + 0.22f, baseY + 0.52f, 0f, 0.22f, 1.02f, 0.22f, accentColor, rotationX = -stride * 1.2f, rotationY = sideLean)
+            drawCube(runnerX, baseY + 1.54f, 0f, 0.92f, 1.22f, 0.64f, primary, rotationY = sideLean)
+            drawCube(runnerX, baseY + 1.72f, -0.22f, 0.68f, 0.18f, 0.26f, secondary, rotationY = sideLean)
+            drawCube(runnerX, baseY + 1.46f, -0.38f, 0.52f, 0.64f, 0.26f, gear, rotationY = sideLean)
+            drawCube(runnerX, baseY + 2.48f, 0.04f, 0.60f, 0.62f, 0.58f, skinTone, rotationY = sideLean)
+            drawCube(runnerX, baseY + 2.82f, -0.02f, 0.66f, 0.18f, 0.50f, hairColor, rotationY = sideLean)
+            drawCube(runnerX - 0.52f, baseY + 1.56f, 0.02f, 0.18f, 0.96f, 0.18f, gear, rotationX = -stride, rotationY = sideLean)
+            drawCube(runnerX + 0.52f, baseY + 1.56f, 0.02f, 0.18f, 0.96f, 0.18f, gear, rotationX = stride, rotationY = sideLean)
+            drawCube(runnerX - 0.22f, baseY + 0.56f, 0f, 0.24f, 1.08f, 0.24f, primary, rotationX = stride * 1.2f, rotationY = sideLean)
+            drawCube(runnerX + 0.22f, baseY + 0.56f, 0f, 0.24f, 1.08f, 0.24f, primary, rotationX = -stride * 1.2f, rotationY = sideLean)
+            drawCube(runnerX - 0.22f, baseY + 0.02f, 0.08f, 0.28f, 0.26f, 0.40f, gear, rotationY = sideLean)
+            drawCube(runnerX + 0.22f, baseY + 0.02f, 0.08f, 0.28f, 0.26f, 0.40f, gear, rotationY = sideLean)
         }
     }
 
@@ -749,7 +817,13 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
+    private fun currentMission(): MissionDefinition {
+        return AdventureContent.missions[missionIndex % AdventureContent.missions.size]
+    }
+
     private fun laneToX(lane: Int): Float = lane * laneWidth
+
+    private fun obstacleX(obstacle: Obstacle): Float = laneToX(obstacle.lane)
 
     private fun minActiveZ(): Float {
         val obstacleMin = obstacles.minOfOrNull { it.z } ?: Float.POSITIVE_INFINITY
@@ -765,31 +839,128 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         return if (openLanes.isEmpty()) 0 else openLanes.random(random)
     }
 
-    private fun unlockedSkins(): List<RunnerSkin> {
-        val totalCoins = effectiveTotalCoins()
-        return RunnerSkin.entries.filter { totalCoins >= it.unlockCoins }
+    private fun oppositeLane(lane: Int): Int = when (lane) {
+        -1 -> 1
+        1 -> -1
+        else -> if (random.nextBoolean()) -1 else 1
     }
 
-    private fun ensureSelectedSkinUnlocked() {
-        if (effectiveTotalCoins() >= selectedSkin.unlockCoins) {
+    private fun unlockedHeroes(): List<RunnerCharacter> {
+        val totalCoins = effectiveTotalCoins()
+        return RunnerCharacter.entries.filter { totalCoins >= it.unlockCoins }
+    }
+
+    private fun ensureSelectedHeroUnlocked() {
+        if (effectiveTotalCoins() >= selectedHero.unlockCoins) {
             return
         }
 
-        selectedSkin = unlockedSkins().lastOrNull() ?: RunnerSkin.VANGUARD
-        GamePreferences.saveSelectedSkin(context, selectedSkin)
+        selectedHero = unlockedHeroes().lastOrNull() ?: RunnerCharacter.ARIA
+        GamePreferences.saveSelectedHero(context, selectedHero)
     }
 
     private fun effectiveTotalCoins(): Int {
         return bankedCoins + if (runCoinsBanked) 0 else coinsCollected
     }
 
+    private fun normalizeMissionState() {
+        if (AdventureContent.missions.isEmpty()) {
+            missionIndex = 0
+            missionProgress = 0
+            lastPersistedMissionProgress = 0
+            return
+        }
+
+        missionIndex = missionIndex.mod(AdventureContent.missions.size)
+        missionProgress = missionProgress.coerceAtLeast(0)
+        lastPersistedMissionProgress = missionProgress
+    }
+
+    private fun updateMissionIncrement(type: MissionType, amount: Int) {
+        val mission = currentMission()
+        if (mission.type != type) {
+            return
+        }
+
+        val updatedProgress = (missionProgress + amount).coerceAtMost(mission.target)
+        if (updatedProgress == missionProgress) {
+            return
+        }
+
+        missionProgress = updatedProgress
+        if (missionProgress >= mission.target) {
+            completeMission()
+        }
+    }
+
+    private fun updateMissionAbsolute(type: MissionType, value: Int) {
+        val mission = currentMission()
+        if (mission.type != type) {
+            return
+        }
+
+        val updatedProgress = value.coerceAtMost(mission.target)
+        if (updatedProgress <= missionProgress) {
+            return
+        }
+
+        missionProgress = updatedProgress
+        if (missionProgress >= mission.target) {
+            completeMission()
+        }
+    }
+
+    private fun completeMission() {
+        val finishedMission = currentMission()
+        bankedCoins += finishedMission.rewardCoins
+        GamePreferences.saveTotalCoins(context, bankedCoins)
+        rewardBanner = "Quest complete: +${finishedMission.rewardCoins} coins"
+        rewardBannerTimer = 3.6f
+
+        missionIndex = (missionIndex + 1) % AdventureContent.missions.size
+        missionProgress = 0
+        lastPersistedMissionProgress = 0
+        GamePreferences.saveMissionIndex(context, missionIndex)
+        GamePreferences.saveMissionProgress(context, missionProgress)
+        ensureSelectedHeroUnlocked()
+    }
+
+    private fun persistMissionState(force: Boolean) {
+        if (missionProgress == lastPersistedMissionProgress) {
+            return
+        }
+
+        val mission = currentMission()
+        val shouldPersist = force || mission.type != MissionType.SURVIVE_DISTANCE || missionProgress - lastPersistedMissionProgress >= 10
+        if (!shouldPersist) {
+            return
+        }
+
+        GamePreferences.saveMissionIndex(context, missionIndex)
+        GamePreferences.saveMissionProgress(context, missionProgress)
+        lastPersistedMissionProgress = missionProgress
+    }
+
     private fun nextUnlockLabel(): String {
         val totalCoins = effectiveTotalCoins()
-        val nextSkin = RunnerSkin.entries.firstOrNull { totalCoins < it.unlockCoins }
-        return if (nextSkin == null) {
-            "All suits unlocked"
+        val nextHero = RunnerCharacter.entries.firstOrNull { totalCoins < it.unlockCoins }
+        return if (nextHero == null) {
+            "All heroes unlocked"
         } else {
-            "${nextSkin.displayName} at ${nextSkin.unlockCoins} coins (${nextSkin.unlockCoins - totalCoins} left)"
+            "${nextHero.displayName} at ${nextHero.unlockCoins} coins (${nextHero.unlockCoins - totalCoins} left)"
+        }
+    }
+
+    private fun activeMissionLabel(): String {
+        val mission = currentMission()
+        return "Quest: ${mission.title} ${missionProgress}/${mission.target}"
+    }
+
+    private fun activeMissionRewardLabel(): String {
+        return if (rewardBannerTimer > 0f && rewardBanner.isNotBlank()) {
+            rewardBanner
+        } else {
+            "Reward: +${currentMission().rewardCoins} coins"
         }
     }
 
@@ -801,7 +972,7 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (magnetTimer > 0f) {
             statuses += "Magnet ${magnetTimer.toInt() + 1}s"
         }
-        return if (statuses.isEmpty()) "No active boost" else statuses.joinToString("  ")
+        return if (statuses.isEmpty()) "No active relic" else statuses.joinToString("  ")
     }
 
     private fun color(r: Float, g: Float, b: Float, a: Float = 1f): FloatArray {
@@ -822,8 +993,11 @@ class GameRenderer(private val context: Context) : GLSurfaceView.Renderer {
             coins = coinsCollected,
             totalCoins = effectiveTotalCoins(),
             speedKph = (speed * 11.5f).toInt(),
-            selectedSkin = selectedSkin.displayName,
+            selectedHero = selectedHero.displayName,
+            selectedHeroTitle = selectedHero.title,
             nextUnlock = nextUnlockLabel(),
+            activeMission = activeMissionLabel(),
+            activeMissionReward = activeMissionRewardLabel(),
             activePowerUp = activePowerUpLabel(),
             musicEnabled = soundManager.isMusicEnabled(),
             sfxEnabled = soundManager.isSfxEnabled()

@@ -8,7 +8,9 @@ object GamePreferences {
     private const val TOTAL_COINS_KEY = "total_coins"
     private const val MUSIC_ENABLED_KEY = "music_enabled"
     private const val SFX_ENABLED_KEY = "sfx_enabled"
-    private const val SELECTED_SKIN_KEY = "selected_skin"
+    private const val SELECTED_HERO_KEY = "selected_hero"
+    private const val MISSION_INDEX_KEY = "mission_index"
+    private const val MISSION_PROGRESS_KEY = "mission_progress"
 
     fun getHighScore(context: Context): Int {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -58,16 +60,40 @@ object GamePreferences {
             .apply()
     }
 
-    fun getSelectedSkin(context: Context): RunnerSkin {
+    fun getSelectedHero(context: Context): RunnerCharacter {
         val id = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(SELECTED_SKIN_KEY, RunnerSkin.VANGUARD.id)
-        return RunnerSkin.fromId(id)
+            .getString(SELECTED_HERO_KEY, RunnerCharacter.ARIA.id)
+        return RunnerCharacter.fromId(id)
     }
 
-    fun saveSelectedSkin(context: Context, skin: RunnerSkin) {
+    fun saveSelectedHero(context: Context, hero: RunnerCharacter) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(SELECTED_SKIN_KEY, skin.id)
+            .putString(SELECTED_HERO_KEY, hero.id)
+            .apply()
+    }
+
+    fun getMissionIndex(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(MISSION_INDEX_KEY, 0)
+    }
+
+    fun saveMissionIndex(context: Context, missionIndex: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(MISSION_INDEX_KEY, missionIndex)
+            .apply()
+    }
+
+    fun getMissionProgress(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(MISSION_PROGRESS_KEY, 0)
+    }
+
+    fun saveMissionProgress(context: Context, missionProgress: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(MISSION_PROGRESS_KEY, missionProgress)
             .apply()
     }
 }
