@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Infinity Rush 3D</string>
+    <string name="hud_score">Score</string>
+    <string name="hud_best">Best</string>
+    <string name="hud_coins">Coins</string>
+    <string name="hud_speed">Speed</string>
+    <string name="start_title">Infinity Rush 3D</string>
+    <string name="start_subtitle">A lane-switching endless runner with jump, slide, coins, and cinematic 3D chase camera.</string>
+    <string name="start_controls">Swipe left or right to change lanes, tap to jump, and swipe down to slide under gates.</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="restart">Restart</string>
+    <string name="paused">Paused</string>
+    <string name="paused_subtitle">Catch your breath, tune the audio, and jump back into the run.</string>
+    <string name="game_over">Run Over</string>
+    <string name="game_over_subtitle">The upgraded course is faster, denser, and built for lane-switching mastery.</string>
+    <string name="music">Music</string>
+    <string name="sfx">Sound FX</string>
+</resources>
