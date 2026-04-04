@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "InfinityRush3D"
+rootProject.name = "RelicRush"
 include(":app")
