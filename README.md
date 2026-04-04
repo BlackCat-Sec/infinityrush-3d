@@ -1,6 +1,6 @@
 # Infinity Rush 3D
 
-Infinity Rush 3D is a standalone Android endless runner built with Kotlin and OpenGL ES 2.0. It keeps the easy-to-open Android Studio setup from the original project, but upgrades the gameplay into a lane-switching 3D chase runner with jump, slide, coins, fog, lighting, and a forward camera inspired by arcade runners.
+Infinity Rush 3D is a standalone Android endless runner built with Kotlin and OpenGL ES 2.0. It keeps the easy-to-open Android Studio setup from the original project, but upgrades the gameplay into a lane-switching 3D chase runner with jump, slide, coins, power-ups, unlockable suits, skyline scenery, fog, lighting, and a forward camera inspired by arcade runners.
 
 ## Highlights
 
@@ -8,7 +8,9 @@ Infinity Rush 3D is a standalone Android endless runner built with Kotlin and Op
 - Three-lane 3D endless runner with swipe lane switching
 - Tap to jump and swipe down to slide under gates
 - Procedural obstacle patterns with blockers, hurdles, and slide gates
-- Coin pickup rows, speed ramping, and persistent high score
+- Shield and magnet power-ups for longer, more expressive runs
+- Coin pickup rows, speed ramping, persistent high score, and lifetime coin bank
+- Unlockable runner suits with saved selection between sessions
 - Start, pause, resume, and game-over overlays
 - Background music and sound effects with saved audio toggles
 - Separate application ID from the 2D game: `com.infinityrush.game3d`
@@ -40,6 +42,8 @@ Infinity Rush 3D is a standalone Android endless runner built with Kotlin and Op
 - Swipe right: move right lane
 - Tap: jump
 - Swipe down: slide
+- Collect shield pickups to absorb one crash
+- Collect magnet pickups to pull nearby coins
 - Pause button: pause the run
 
 ## Build Outputs

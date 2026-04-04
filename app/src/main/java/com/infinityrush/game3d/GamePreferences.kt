@@ -5,8 +5,10 @@ import android.content.Context
 object GamePreferences {
     private const val PREFS_NAME = "infinity_rush_3d_prefs"
     private const val HIGH_SCORE_KEY = "high_score"
+    private const val TOTAL_COINS_KEY = "total_coins"
     private const val MUSIC_ENABLED_KEY = "music_enabled"
     private const val SFX_ENABLED_KEY = "sfx_enabled"
+    private const val SELECTED_SKIN_KEY = "selected_skin"
 
     fun getHighScore(context: Context): Int {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -17,6 +19,18 @@ object GamePreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putInt(HIGH_SCORE_KEY, highScore)
+            .apply()
+    }
+
+    fun getTotalCoins(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(TOTAL_COINS_KEY, 0)
+    }
+
+    fun saveTotalCoins(context: Context, totalCoins: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(TOTAL_COINS_KEY, totalCoins)
             .apply()
     }
 
@@ -43,5 +57,17 @@ object GamePreferences {
             .putBoolean(SFX_ENABLED_KEY, enabled)
             .apply()
     }
-}
 
+    fun getSelectedSkin(context: Context): RunnerSkin {
+        val id = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(SELECTED_SKIN_KEY, RunnerSkin.VANGUARD.id)
+        return RunnerSkin.fromId(id)
+    }
+
+    fun saveSelectedSkin(context: Context, skin: RunnerSkin) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SELECTED_SKIN_KEY, skin.id)
+            .apply()
+    }
+}

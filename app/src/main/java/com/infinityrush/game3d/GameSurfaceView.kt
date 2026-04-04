@@ -52,6 +52,10 @@ class GameSurfaceView @JvmOverloads constructor(
         queueEvent { rendererImpl.setSfxEnabled(enabled) }
     }
 
+    fun cycleSkin() {
+        queueEvent { rendererImpl.cycleSkin() }
+    }
+
     fun pauseForLifecycle() {
         queueEvent { rendererImpl.onHostPause() }
         onPause()
@@ -116,4 +120,3 @@ class GameSurfaceView @JvmOverloads constructor(
         return true
     }
 }
-
